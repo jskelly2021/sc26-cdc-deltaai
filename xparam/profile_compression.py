@@ -1,13 +1,13 @@
 """
 profile_compression.py
 ----------------------
-Profiles CDC compression / encoding performance with a per-image timing
-breakdown that mirrors the reconstruction profiling table.
+Profiles CDC learned compression/context-generation performance with a
+per-image timing breakdown.
 
-The model architecture and diffusion.compress(...) call are intentionally kept
-the same as evaluate_compression.py. This script only adds profiling metadata:
-data-load timing, CUDA-event compression timing, PNG write timing, peak GPU
-memory, checkpoint/repeat labels, and a compact report.
+Important: GaussianDiffusion.compress() is an end-to-end wrapper that runs both
+context generation and diffusion reconstruction. This script profiles only
+diffusion.context_fn(images), the learned encoder / hyperprior / BPP / context
+feature generation path used on the compression side.
 
 Usage:
   cd /projects/bfod/$USER/sc26-cdc-deltaai
@@ -23,7 +23,6 @@ Usage:
 Outputs:
   compression_profile_results.csv
   compression_profile_report.txt
-  *_recon.png reconstructed images
 """
 
 import argparse
@@ -54,13 +53,13 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Profile CDC compression / encoding pipeline")
+    parser = argparse.ArgumentParser(description="Profile CDC context-only compression pipeline")
     parser.add_argument("--ckpt", type=str, required=True, help="Path to model checkpoint (.pt)")
     parser.add_argument("--checkpoint_label", type=str, default=None, help="Short checkpoint label for reports, e.g. b0.2048")
     parser.add_argument("--img_dir", type=str, required=True, help="Directory containing input images")
-    parser.add_argument("--out_dir", type=str, required=True, help="Directory for reconstructions and profile outputs")
-    parser.add_argument("--gamma", type=float, default=0.8, help="Noise init scale")
-    parser.add_argument("--n_denoise_step", type=int, default=65, help="Number of diffusion denoising steps")
+    parser.add_argument("--out_dir", type=str, required=True, help="Directory for profile outputs")
+    parser.add_argument("--gamma", type=float, default=0.8, help="Ignored legacy arg; context-only profiling does not sample noise")
+    parser.add_argument("--n_denoise_step", type=int, default=65, help="Ignored legacy arg; context-only profiling does not run diffusion sampling")
     parser.add_argument("--device", type=int, default=0, help="CUDA device index")
     parser.add_argument("--lpips_weight", type=float, required=True, help="LPIPS auxiliary loss weight used during training")
     parser.add_argument("--n_images", type=int, default=5, help="Number of images to profile")
@@ -82,7 +81,7 @@ def get_cuda_device(device_index: int):
 
 
 class CudaTimer:
-    """CUDA-event timer for GPU-side compression latency."""
+    """CUDA-event timer for GPU-side context-generation latency."""
 
     def __init__(self, device_index: int):
         self.device_index = device_index
@@ -164,20 +163,19 @@ def fieldnames():
         "image",
         "width",
         "height",
-        "n_denoise_step",
-        "gamma",
         "lpips_weight",
         "model_load_sec",
         "data_load_sec",
-        "compress_sec",
-        "write_sec",
+        "context_sec",
         "total_sec",
         "images_per_hour",
         "peak_gpu_mem_mb",
         "bpp",
         "compression_ratio",
         "orig_size_bytes",
-        "recon_size_bytes",
+        "context_output_shapes",
+        "q_latent_shape",
+        "q_hyper_latent_shape",
         "status",
     ]
 
@@ -197,7 +195,7 @@ def main():
     out_dir = pathlib.Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Profiling CDC compression")
+    print("Profiling CDC context-only compression")
     print(f"Checkpoint : {config.ckpt}")
     print(f"Label      : {checkpoint_label}")
     print(f"Repeat     : {config.repeat}")
@@ -243,30 +241,22 @@ def main():
 
         torch.cuda.reset_peak_memory_stats(device_index)
 
-        # CUDA events measure the asynchronous GPU compression path accurately.
+        # CUDA events measure the asynchronous GPU context-generation path accurately.
         timer.start()
         with torch.no_grad():
-            compressed, bpp = diffusion.compress(
-                tensor * 2.0 - 1.0,
-                sample_steps=config.n_denoise_step,
-                bpp_return_mean=True,
-                init=torch.randn_like(tensor) * config.gamma,
-            )
-        compress_sec = timer.stop()
+            # `diffusion.compress()` includes both context generation and diffusion reconstruction.
+            # For compression-side profiling, time only `context_fn`, which performs the learned
+            # encoder / hyperprior / BPP / context feature generation path.
+            context_dict = diffusion.context_fn(tensor * 2.0 - 1.0)
+        context_sec = timer.stop()
         peak_mem_mb = torch.cuda.max_memory_allocated(device_index) / 1024 ** 2
 
-        # Wall-clock timing is appropriate for clamp/rescale, device-to-host
-        # transfer, and PNG writing.
-        t_write_start = time.perf_counter()
-        compressed = compressed.clamp(-1, 1) / 2.0 + 0.5
-        out_path = out_dir / f"{pathlib.Path(img_name).stem}_repeat{config.repeat:02d}_recon.png"
-        torchvision.utils.save_image(compressed.cpu(), str(out_path))
-        write_sec = time.perf_counter() - t_write_start
-
-        recon_bytes = os.path.getsize(str(out_path))
-        bpp_val = float(bpp)
+        context_output_shapes = str([list(t.shape) for t in context_dict["output"]])
+        q_latent_shape = str(list(context_dict["q_latent"].shape))
+        q_hyper_latent_shape = str(list(context_dict["q_hyper_latent"].shape))
+        bpp_val = float(context_dict["bpp"].mean())
         compression_ratio = UNCOMPRESSED_BPP / bpp_val if bpp_val > 0 else float("inf")
-        total_sec = data_load_sec + compress_sec + write_sec
+        total_sec = data_load_sec + context_sec
         images_per_hour = 3600.0 / total_sec if total_sec > 0 else 0.0
 
         row = {
@@ -277,20 +267,19 @@ def main():
             "image": img_name,
             "width": width,
             "height": height,
-            "n_denoise_step": config.n_denoise_step,
-            "gamma": config.gamma,
             "lpips_weight": config.lpips_weight,
             "model_load_sec": round(model_load_sec, 3),
             "data_load_sec": round(data_load_sec, 3),
-            "compress_sec": round(compress_sec, 3),
-            "write_sec": round(write_sec, 3),
+            "context_sec": round(context_sec, 3),
             "total_sec": round(total_sec, 3),
             "images_per_hour": round(images_per_hour, 2),
             "peak_gpu_mem_mb": round(peak_mem_mb, 1),
             "bpp": round(bpp_val, 4),
             "compression_ratio": round(compression_ratio, 2),
             "orig_size_bytes": orig_bytes,
-            "recon_size_bytes": recon_bytes,
+            "context_output_shapes": context_output_shapes,
+            "q_latent_shape": q_latent_shape,
+            "q_hyper_latent_shape": q_hyper_latent_shape,
             "status": "success",
         }
         results.append(row)
@@ -298,8 +287,7 @@ def main():
         print(
             f"[{i + 1:3d}/{len(selected)}] {img_name:30s} | "
             f"load {data_load_sec:5.2f}s | "
-            f"compress {compress_sec:6.2f}s | "
-            f"write {write_sec:5.2f}s | "
+            f"context {context_sec:6.2f}s | "
             f"total {total_sec:6.2f}s | "
             f"mem {peak_mem_mb:7.1f} MB | "
             f"bpp {bpp_val:.4f} | "
@@ -308,48 +296,48 @@ def main():
 
     successful = [r for r in results if r.get("status") == "success"]
     total_orig_bytes = sum(int(r["orig_size_bytes"]) for r in successful)
-    total_recon_bytes = sum(int(r["recon_size_bytes"]) for r in successful)
     avg_data_load = safe_mean([r["data_load_sec"] for r in successful])
-    avg_compress = safe_mean([r["compress_sec"] for r in successful])
-    avg_write = safe_mean([r["write_sec"] for r in successful])
+    avg_context = safe_mean([r["context_sec"] for r in successful])
     avg_total = safe_mean([r["total_sec"] for r in successful])
     avg_images_per_hour = safe_mean([r["images_per_hour"] for r in successful])
     avg_mem = safe_mean([r["peak_gpu_mem_mb"] for r in successful])
     avg_bpp = safe_mean([r["bpp"] for r in successful])
     avg_ratio = safe_mean([r["compression_ratio"] for r in successful])
-    file_size_ratio = total_orig_bytes / total_recon_bytes if total_recon_bytes > 0 else 0.0
 
     report_lines = [
         "=" * 72,
-        "  CDC COMPRESSION PROFILING REPORT",
+        "  CDC CONTEXT-ONLY COMPRESSION PROFILING REPORT",
         "=" * 72,
+        "  This script profiles diffusion.context_fn(images).",
+        "  This is the learned compression/context-generation stage.",
+        "  It includes latent encoding, hyperprior/BPP computation, quantization,",
+        "  and context feature generation.",
+        "  It excludes diffusion.p_sample_loop().",
+        "  It does not measure reconstruction.",
+        "  For reconstruction timing, use profile_reconstruction.py.",
+        "-" * 72,
         f"  Checkpoint label       : {checkpoint_label}",
         f"  Checkpoint path        : {config.ckpt}",
         f"  Repeat                 : {config.repeat}",
         f"  Images profiled        : {len(successful)}",
         f"  Start index            : {config.start_index}",
-        f"  Denoising steps        : {config.n_denoise_step}",
-        f"  Gamma                  : {config.gamma}",
         f"  LPIPS weight           : {config.lpips_weight}",
         "-" * 72,
         "  TIMING BREAKDOWN (per-image averages; model load excluded)",
         f"    Model load time       : {model_load_sec:.2f}s  (one-time cost)",
         f"    Data load/preproc     : {avg_data_load:.3f}s",
-        f"    Compression           : {avg_compress:.3f}s",
-        f"    PNG write/postproc    : {avg_write:.3f}s",
+        f"    Context generation    : {avg_context:.3f}s",
         f"    Total per image       : {avg_total:.3f}s",
         f"    Images/hour           : {avg_images_per_hour:.2f}",
         "-" * 72,
         "  GPU MEMORY",
         f"    After model load      : {mem_after_load_mb:.1f} MB",
-        f"    Peak during compress  : {avg_mem:.1f} MB (average across images)",
+        f"    Peak during context   : {avg_mem:.1f} MB (average across images)",
         "-" * 72,
         "  COMPRESSION METRICS",
         f"    Average BPP           : {avg_bpp:.4f}",
         f"    Compression ratio     : {avg_ratio:.2f}x vs uncompressed RGB",
         f"    Total original size   : {format_size(total_orig_bytes)} ({total_orig_bytes} bytes)",
-        f"    Total reconstructed   : {format_size(total_recon_bytes)} ({total_recon_bytes} bytes)",
-        f"    File size ratio       : {file_size_ratio:.2f}x  (orig files / recon PNG)",
         "=" * 72,
     ]
     report_text = "\n".join(report_lines)

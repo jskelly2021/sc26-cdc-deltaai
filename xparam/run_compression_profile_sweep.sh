@@ -2,8 +2,9 @@
 # =============================================================================
 # run_compression_profile_sweep.sh
 # --------------------------------
-# SLURM job script for a small repeated CDC compression / encoding profiling
-# sweep on DeltaAI.
+# SLURM job script for a small repeated CDC context-only compression profiling
+# sweep on DeltaAI. This measures diffusion.context_fn(images), not end-to-end
+# diffusion reconstruction.
 #
 # Submit with:
 #   cd /projects/bfod/$USER/sc26-cdc-deltaai
@@ -74,8 +75,6 @@ OUT_ROOT="${OUT_ROOT:-${REPO_DIR}/output/compression_profile/${JOB_ID}}"
 N_IMAGES="${N_IMAGES:-5}"
 START_INDEX="${START_INDEX:-0}"
 REPEATS="${REPEATS:-3}"
-N_DENOISE_STEP=65
-GAMMA=0.8
 
 mkdir -p "${REPO_DIR}/xparam/logs" "${OUT_ROOT}"
 
@@ -93,15 +92,15 @@ fi
 cd "${REPO_DIR}/xparam"
 
 echo "=========================================="
-echo "  CDC Compression Profiling Sweep"
+echo "  CDC Context-Only Compression Profiling Sweep"
+echo "  Measures    : diffusion.context_fn(images)"
+echo "  Excludes    : diffusion reconstruction / p_sample_loop"
 echo "  Job ID      : ${JOB_ID}"
 echo "  Node        : $(hostname)"
 echo "  GPU         : $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 echo "  Date        : $(date)"
 echo "  Images/run  : ${N_IMAGES}"
 echo "  Repeats     : ${REPEATS}"
-echo "  Steps       : ${N_DENOISE_STEP}"
-echo "  Gamma       : ${GAMMA}"
 echo "  Repo        : ${REPO_DIR}"
 echo "  Images      : ${IMG_DIR}"
 echo "  Checkpoints : ${CKPT_DIR}"
@@ -141,7 +140,7 @@ for idx in "${!LABELS[@]}"; do
         mkdir -p "${OUT_DIR}"
 
         echo ""
-        echo ">>> Profiling ${LABEL}, repeat ${REPEAT_PADDED}/${REPEATS}, lpips_weight=${LPIPS_WEIGHT}"
+        echo ">>> Context-only compression profiling ${LABEL}, repeat ${REPEAT_PADDED}/${REPEATS}, lpips_weight=${LPIPS_WEIGHT}"
         echo "    Output: ${OUT_DIR}"
 
         python profile_compression.py \
@@ -149,8 +148,6 @@ for idx in "${!LABELS[@]}"; do
             --checkpoint_label "${LABEL}" \
             --img_dir "${IMG_DIR}" \
             --out_dir "${OUT_DIR}" \
-            --gamma "${GAMMA}" \
-            --n_denoise_step "${N_DENOISE_STEP}" \
             --device 0 \
             --lpips_weight "${LPIPS_WEIGHT}" \
             --n_images "${N_IMAGES}" \
@@ -160,7 +157,7 @@ for idx in "${!LABELS[@]}"; do
 done
 
 echo ""
-echo ">>> Generating compression profile summary and plots"
+echo ">>> Generating context-only compression profile summary and plots"
 
 python plot_compression_profile.py \
     --profile_dir "${OUT_ROOT}" \
@@ -168,7 +165,7 @@ python plot_compression_profile.py \
 
 echo ""
 echo "=========================================="
-echo "  Compression profiling complete."
+echo "  Context-only compression profiling complete."
 echo "  Results: ${OUT_ROOT}"
 echo "  Summary: ${OUT_ROOT}/compression_profile_summary.csv"
 echo "  Plots  : ${OUT_ROOT}/plots"
