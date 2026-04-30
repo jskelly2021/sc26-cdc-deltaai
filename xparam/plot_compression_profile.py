@@ -5,9 +5,10 @@ Combines compression_profile_results.csv files from a compression profiling
 sweep, writes an aggregate summary table, and generates compression-side plots.
 
 Usage:
-  python plot_compression_profile.py \
-    --profile_dir /path/to/output/compression_profile/<job_id> \
-    --out_dir /path/to/output/compression_profile/<job_id>
+  cd /projects/bfod/$USER/sc26-cdc-deltaai
+  python xparam/plot_compression_profile.py \
+    --profile_dir output/compression_profile/<job_id> \
+    --out_dir output/compression_profile/<job_id>
 
 Outputs:
   compression_profile_summary.csv

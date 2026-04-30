@@ -10,10 +10,11 @@ data-load timing, CUDA-event compression timing, PNG write timing, peak GPU
 memory, checkpoint/repeat labels, and a compact report.
 
 Usage:
-  python profile_compression.py \
+  cd /projects/bfod/$USER/sc26-cdc-deltaai
+  python xparam/profile_compression.py \
     --ckpt /path/to/checkpoint.pt \
     --checkpoint_label b0.2048 \
-    --img_dir /path/to/drone_imgs \
+    --img_dir imgs \
     --out_dir /path/to/profile_out \
     --lpips_weight 0.9 \
     --n_images 5 \
@@ -29,12 +30,19 @@ import argparse
 import csv
 import os
 import pathlib
+import sys
 import time
 
 import numpy as np
 import torch
 import torchvision
 from ema_pytorch import EMA
+
+# Keep local xparam/modules imports working whether this is launched from the
+# repo root or from inside xparam.
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from modules.compress_modules import ResnetCompressor
 from modules.denoising_diffusion import GaussianDiffusion
