@@ -45,12 +45,12 @@ python -m pip install --user compressai einops lpips ema-pytorch tqdm matplotlib
 # Override IMG_DIR, CKPT_DIR, WEIGHT_DIR, or OUT_ROOT at submit time if your
 # data/weights live outside the clone, e.g. CKPT_DIR=/path/to/x_param sbatch ...
 REPO_DIR="${REPO_DIR:-/projects/bfod/$USER/sc26-cdc-deltaai}"
-IMG_DIR="${IMG_DIR:-${REPO_DIR}/imgs}"
+IMG_DIR="${IMG_DIR:-${REPO_DIR}/data/imgs}"
 WEIGHT_DIR="${WEIGHT_DIR:-${REPO_DIR}/weights}"
 CKPT_DIR="${CKPT_DIR:-${WEIGHT_DIR}/x_param}"
 
-if [[ ! -d "${IMG_DIR}" && -d "${REPO_DIR}/data/imgs" ]]; then
-    IMG_DIR="${REPO_DIR}/data/imgs"
+if [[ ! -d "${IMG_DIR}" && -d "${REPO_DIR}/imgs" ]]; then
+    IMG_DIR="${REPO_DIR}/imgs"
 fi
 
 if [[ ! -d "${CKPT_DIR}" ]]; then
