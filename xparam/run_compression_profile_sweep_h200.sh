@@ -3,11 +3,11 @@
 # run_compression_profile_sweep.sh
 # --------------------------------
 # SLURM job script for a small repeated CDC context-only compression profiling
-# sweep on DeltaAI. This measures diffusion.context_fn(images), not end-to-end
+# sweep on delta. This measures diffusion.context_fn(images), not end-to-end
 # diffusion reconstruction.
 #
 # Submit with:
-#   cd /projects/bfod/$USER/sc26-cdc-deltaai
+#   cd /projects/bfod/$USER/sc26-cdc-delta
 #   mkdir -p xparam/logs
 #   sbatch xparam/run_compression_profile_sweep.sh
 #
@@ -37,16 +37,16 @@ module purge
 module load cudatoolkit/25.3_12.8
 module load pytorch-conda/2.8
 
-# DeltaAI's shared conda base does not expose user-site packages by default.
+# delta's shared conda base does not expose user-site packages by default.
 export PYTHONPATH="$HOME/.local/lib/python3.12/site-packages:${PYTHONPATH:-}"
 
 # Install the CDC-specific dependencies into the user site if they are missing.
 python -m pip install --user compressai einops lpips ema-pytorch tqdm matplotlib pandas --quiet
 
-# Portable DeltaAI paths for the cloned SC26 CDC repo.
+# Portable delta paths for the cloned SC26 CDC repo.
 # Override IMG_DIR, CKPT_DIR, WEIGHT_DIR, or OUT_ROOT at submit time if your
 # data/weights live outside the clone, e.g. CKPT_DIR=/path/to/x_param sbatch ...
-REPO_DIR="${REPO_DIR:-/projects/bfod/$USER/sc26-cdc-deltaai}"
+REPO_DIR="${REPO_DIR:-/projects/bfod/$USER/sc26-cdc-delta}"
 IMG_DIR="${IMG_DIR:-${REPO_DIR}/data/imgs}"
 WEIGHT_DIR="${WEIGHT_DIR:-${REPO_DIR}/weights}"
 CKPT_DIR="${CKPT_DIR:-${WEIGHT_DIR}/x_param}"
