@@ -15,8 +15,8 @@
 #   sbatch run_compression_profile_sweep.sh
 #
 # Optional overrides:
-#   N_IMAGES=10 START_INDEX=5 INCLUDE_B00032=1 sbatch xparam/run_compression_profile_sweep.sh
-#   N_IMAGES=10 START_INDEX=5 INCLUDE_B00032=1 sbatch run_compression_profile_sweep.sh
+#   N_IMAGES=10 START_INDEX=5 sbatch xparam/run_compression_profile_sweep.sh
+#   N_IMAGES=10 START_INDEX=5 REPEATS=1 sbatch run_compression_profile_sweep.sh
 # =============================================================================
 
 #SBATCH --job-name=cdc_compress_profile
@@ -107,25 +107,30 @@ echo "  Checkpoints : ${CKPT_DIR}"
 echo "  Output root : ${OUT_ROOT}"
 echo "=========================================="
 
-LABELS=("b0.0128" "b0.2048")
-LPIPS_WEIGHTS=("0.0" "0.9")
+LABELS=("b0.0032" "b0.0064" "b0.0128" "b0.0512" "b0.1024" "b0.2048")
+LPIPS_WEIGHTS=("0.0" "0.0" "0.0" "0.9" "0.9" "0.9")
 CKPTS=(
-    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0032-x-cosine-01-float32-aux0.0_2.pt"
-    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0064-x-cosine-01-float32-aux0.0_2.pt"
+    "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0032-x-cosine-01-float32-aux0.0_2.pt"
+    "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0064-x-cosine-01-float32-aux0.0_2.pt"
     "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0128-x-cosine-01-float32-aux0.0_2.pt"
-    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0512-x-cosine-01-float32-aux0.9lpips_2.pt"
-    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.1024-x-cosine-01-float32-aux0.9lpips_2.pt"
+    "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0512-x-cosine-01-float32-aux0.9lpips_2.pt"
+    "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.1024-x-cosine-01-float32-aux0.9lpips_2.pt"
     "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.2048-x-cosine-01-float32-aux0.9lpips_2.pt"
 )
 
 if [[ "${INCLUDE_B00032:-0}" == "1" ]]; then
-    LABELS=("b0.0032" "${LABELS[@]}")
-    LPIPS_WEIGHTS=("0.0" "${LPIPS_WEIGHTS[@]}")
-    CKPTS=(
-        "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0032-x-cosine-01-float32-aux0.0_2.pt"
-        "${CKPTS[@]}"
-    )
+    echo "NOTE: INCLUDE_B00032 is deprecated; b0.0032 is included by default."
 fi
+
+if [[ "${#LABELS[@]}" -ne "${#LPIPS_WEIGHTS[@]}" || "${#LABELS[@]}" -ne "${#CKPTS[@]}" ]]; then
+    echo "ERROR: LABELS, LPIPS_WEIGHTS, and CKPTS must have the same length." >&2
+    echo "  LABELS        : ${#LABELS[@]}" >&2
+    echo "  LPIPS_WEIGHTS : ${#LPIPS_WEIGHTS[@]}" >&2
+    echo "  CKPTS         : ${#CKPTS[@]}" >&2
+    exit 1
+fi
+
+echo "  Num ckpts   : ${#CKPTS[@]}"
 
 for idx in "${!LABELS[@]}"; do
     LABEL="${LABELS[$idx]}"
