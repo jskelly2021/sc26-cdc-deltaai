@@ -42,7 +42,10 @@ SUMMARY_COLUMNS = [
     "avg_images_per_hour",
     "avg_peak_gpu_mem_mb",
     "avg_bpp",
+    "avg_raw_rgb_to_est_compressed_ratio",
     "avg_compression_ratio",
+    "avg_orig_file_to_est_compressed_ratio",
+    "avg_estimated_compressed_bytes",
     "total_orig_size_bytes",
     "avg_orig_size_bytes",
     "n_rows",
@@ -115,13 +118,21 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         )
         df["context_sec"] = df["compress_sec"]
 
+    if "raw_rgb_to_est_compressed_ratio" not in df.columns and "compression_ratio" in df.columns:
+        df["raw_rgb_to_est_compressed_ratio"] = df["compression_ratio"]
+    if "compression_ratio" not in df.columns and "raw_rgb_to_est_compressed_ratio" in df.columns:
+        df["compression_ratio"] = df["raw_rgb_to_est_compressed_ratio"]
+
     numeric_columns = [
         "context_sec",
         "total_sec",
         "images_per_hour",
         "peak_gpu_mem_mb",
         "bpp",
+        "raw_rgb_to_est_compressed_ratio",
         "compression_ratio",
+        "orig_file_to_est_compressed_ratio",
+        "estimated_compressed_bytes",
         "orig_size_bytes",
     ]
     for column in numeric_columns:
@@ -132,7 +143,7 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if "image" not in df.columns:
         df["image"] = ""
 
-    required = ["context_sec", "total_sec", "bpp", "compression_ratio"]
+    required = ["context_sec", "total_sec", "bpp", "raw_rgb_to_est_compressed_ratio"]
     df = df.dropna(subset=required, how="any").copy()
     return df
 
@@ -150,7 +161,10 @@ def build_summary(df: pd.DataFrame) -> pd.DataFrame:
             avg_images_per_hour=("images_per_hour", "mean"),
             avg_peak_gpu_mem_mb=("peak_gpu_mem_mb", "mean"),
             avg_bpp=("bpp", "mean"),
+            avg_raw_rgb_to_est_compressed_ratio=("raw_rgb_to_est_compressed_ratio", "mean"),
             avg_compression_ratio=("compression_ratio", "mean"),
+            avg_orig_file_to_est_compressed_ratio=("orig_file_to_est_compressed_ratio", "mean"),
+            avg_estimated_compressed_bytes=("estimated_compressed_bytes", "mean"),
             total_orig_size_bytes=("orig_size_bytes", "sum"),
             avg_orig_size_bytes=("orig_size_bytes", "mean"),
             n_rows=("image", "count"),
@@ -174,7 +188,7 @@ def print_summary(summary: pd.DataFrame):
     print("=" * 92)
     print(
         f"  {'Checkpoint':>10}  {'Context(s)':>10}  {'Total(s)':>8}  {'Img/hr':>8}  "
-        f"{'Mem(MB)':>8}  {'BPP':>7}  {'Ratio':>8}  {'Rows':>5}"
+        f"{'Mem(MB)':>8}  {'BPP':>7}  {'RGB/Est':>8}  {'Rows':>5}"
     )
     print("-" * 92)
     for _, row in summary.iterrows():
@@ -185,7 +199,7 @@ def print_summary(summary: pd.DataFrame):
             f"{row.avg_images_per_hour:>8.2f}  "
             f"{row.avg_peak_gpu_mem_mb:>8.1f}  "
             f"{row.avg_bpp:>7.4f}  "
-            f"{row.avg_compression_ratio:>7.2f}x  "
+            f"{row.avg_raw_rgb_to_est_compressed_ratio:>7.2f}x  "
             f"{int(row.n_rows):>5}"
         )
     print("=" * 92 + "\n")
@@ -243,7 +257,7 @@ def save_speed_ratio_plot(summary: pd.DataFrame, plots_dir: pathlib.Path):
     cmap = plt.get_cmap("tab10")
     for idx, row in summary.reset_index(drop=True).iterrows():
         ax.scatter(
-            row.avg_compression_ratio,
+            row.avg_raw_rgb_to_est_compressed_ratio,
             row.avg_images_per_hour,
             s=90,
             color=cmap(idx % 10),
@@ -252,12 +266,12 @@ def save_speed_ratio_plot(summary: pd.DataFrame, plots_dir: pathlib.Path):
         )
         ax.annotate(
             row.checkpoint_label,
-            xy=(row.avg_compression_ratio, row.avg_images_per_hour),
+            xy=(row.avg_raw_rgb_to_est_compressed_ratio, row.avg_images_per_hour),
             xytext=(5, 5),
             textcoords="offset points",
             fontsize=9,
         )
-    ax.set_xlabel("Average Compression Ratio vs Uncompressed RGB", fontsize=12)
+    ax.set_xlabel("Average Raw RGB / Estimated CDC Size", fontsize=12)
     ax.set_ylabel("Average Images per Hour", fontsize=12)
     ax.set_title("Speed vs Compression Ratio", fontsize=13, fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.5)
@@ -329,15 +343,15 @@ def save_compression_ratio_plot(summary: pd.DataFrame, plots_dir: pathlib.Path):
     x = np.arange(len(summary))
     ax.bar(
         x,
-        summary["avg_compression_ratio"],
+        summary["avg_raw_rgb_to_est_compressed_ratio"],
         color=plt.get_cmap("tab10")(3),
         alpha=0.85,
     )
     ax.set_xticks(x)
     ax.set_xticklabels(summary["checkpoint_label"], rotation=0)
     ax.set_xlabel("Checkpoint", fontsize=12)
-    ax.set_ylabel("Average Compression Ratio vs Uncompressed RGB", fontsize=12)
-    ax.set_title("Compression Ratio vs Checkpoint", fontsize=13, fontweight="bold")
+    ax.set_ylabel("Average Raw RGB / Estimated CDC Size", fontsize=12)
+    ax.set_title("Raw RGB / Estimated CDC Size vs Checkpoint", fontsize=13, fontweight="bold")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     out_path = plots_dir / "plot_compression_ratio_vs_checkpoint.png"

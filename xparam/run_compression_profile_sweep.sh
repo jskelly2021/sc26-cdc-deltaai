@@ -110,7 +110,11 @@ echo "=========================================="
 LABELS=("b0.0128" "b0.2048")
 LPIPS_WEIGHTS=("0.0" "0.9")
 CKPTS=(
+    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0032-x-cosine-01-float32-aux0.0_2.pt"
+    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0064-x-cosine-01-float32-aux0.0_2.pt"
     "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.0128-x-cosine-01-float32-aux0.0_2.pt"
+    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.0512-x-cosine-01-float32-aux0.9lpips_2.pt"
+    "$CKPT_DIR/image-l2-use_weight5-vimeo-d64-t8193-b0.1024-x-cosine-01-float32-aux0.9lpips_2.pt"
     "${CKPT_DIR}/image-l2-use_weight5-vimeo-d64-t8193-b0.2048-x-cosine-01-float32-aux0.9lpips_2.pt"
 )
 

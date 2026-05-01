@@ -163,19 +163,34 @@ def fieldnames():
         "image",
         "width",
         "height",
+        "num_pixels",
+        "megapixels",
         "lpips_weight",
         "model_load_sec",
         "data_load_sec",
+        "read_decode_preprocess_cpu_sec",
+        "crop_cpu_sec",
+        "h2d_sec",
         "context_sec",
+        "context_ms_per_megapixel",
+        "data_ms_per_megapixel",
         "total_sec",
         "images_per_hour",
         "peak_gpu_mem_mb",
         "bpp",
+        "estimated_compressed_bits",
+        "estimated_compressed_bytes",
+        "raw_rgb_bytes",
+        "raw_rgb_to_est_compressed_ratio",
         "compression_ratio",
         "orig_size_bytes",
+        "orig_file_to_est_compressed_ratio",
         "context_output_shapes",
         "q_latent_shape",
         "q_hyper_latent_shape",
+        "q_latent_numel",
+        "q_hyper_latent_numel",
+        "context_numel",
         "status",
     ]
 
@@ -227,26 +242,37 @@ def main():
         img_path = os.path.join(config.img_dir, img_name)
         orig_bytes = os.path.getsize(img_path)
 
-        # Wall-clock timing captures CPU image decode, host-to-device transfer,
-        # and cropping/preprocessing work.
-        t_data_start = time.perf_counter()
-        tensor = torchvision.io.read_image(img_path).unsqueeze(0).float().to(device) / 255.0
-        height, width = tensor.shape[-2], tensor.shape[-1]
+        t_read_start = time.perf_counter()
+        img_cpu = torchvision.io.read_image(img_path).unsqueeze(0).float() / 255.0
+        read_decode_preprocess_cpu_sec = time.perf_counter() - t_read_start
+
+        # Crop on CPU before host-to-device transfer so discarded pixels are not
+        # copied to the GPU.
+        t_crop_start = time.perf_counter()
+        height, width = img_cpu.shape[-2], img_cpu.shape[-1]
         height64 = (height // 64) * 64
         width64 = (width // 64) * 64
-        tensor = tensor[:, :, :height64, :width64]
-        height, width = tensor.shape[-2], tensor.shape[-1]
+        img_cpu = img_cpu[:, :, :height64, :width64]
+        height, width = img_cpu.shape[-2], img_cpu.shape[-1]
+        crop_cpu_sec = time.perf_counter() - t_crop_start
+
+        t_h2d_start = time.perf_counter()
+        tensor = img_cpu.to(device, non_blocking=True)
         torch.cuda.synchronize(device_index)
-        data_load_sec = time.perf_counter() - t_data_start
+        h2d_sec = time.perf_counter() - t_h2d_start
+
+        data_load_sec = read_decode_preprocess_cpu_sec + crop_cpu_sec + h2d_sec
 
         torch.cuda.reset_peak_memory_stats(device_index)
 
         # CUDA events measure the asynchronous GPU context-generation path accurately.
         timer.start()
-        with torch.no_grad():
-            # `diffusion.compress()` includes both context generation and diffusion reconstruction.
-            # For compression-side profiling, time only `context_fn`, which performs the learned
-            # encoder / hyperprior / BPP / context feature generation path.
+        with torch.inference_mode():
+            # `diffusion.compress()` includes both the compression/context path and the diffusion
+            # reconstruction path. For compression-side profiling, time only `context_fn`, which
+            # runs the learned compressor: encoder, hyperprior, quantization, bpp estimation,
+            # and context feature generation. The reported bpp is an estimated bitrate from the
+            # entropy model, not necessarily an actual entropy-coded file size.
             context_dict = diffusion.context_fn(tensor * 2.0 - 1.0)
         context_sec = timer.stop()
         peak_mem_mb = torch.cuda.max_memory_allocated(device_index) / 1024 ** 2
@@ -254,8 +280,28 @@ def main():
         context_output_shapes = str([list(t.shape) for t in context_dict["output"]])
         q_latent_shape = str(list(context_dict["q_latent"].shape))
         q_hyper_latent_shape = str(list(context_dict["q_hyper_latent"].shape))
+        q_latent_numel = int(context_dict["q_latent"].numel())
+        q_hyper_latent_numel = int(context_dict["q_hyper_latent"].numel())
+        context_numel = int(sum(t.numel() for t in context_dict["output"]))
+
         bpp_val = float(context_dict["bpp"].mean())
-        compression_ratio = UNCOMPRESSED_BPP / bpp_val if bpp_val > 0 else float("inf")
+        num_pixels = int(width * height)
+        megapixels = num_pixels / 1e6
+        est_compressed_bits = bpp_val * num_pixels
+        est_compressed_bytes = est_compressed_bits / 8.0
+        raw_rgb_bytes = num_pixels * 3
+        raw_rgb_to_est_compressed_ratio = (
+            raw_rgb_bytes / est_compressed_bytes if est_compressed_bytes > 0 else float("inf")
+        )
+        orig_file_to_est_compressed_ratio = (
+            orig_bytes / est_compressed_bytes if est_compressed_bytes > 0 else float("inf")
+        )
+        context_ms_per_megapixel = (
+            context_sec * 1000.0 / megapixels if megapixels > 0 else 0.0
+        )
+        data_ms_per_megapixel = (
+            data_load_sec * 1000.0 / megapixels if megapixels > 0 else 0.0
+        )
         total_sec = data_load_sec + context_sec
         images_per_hour = 3600.0 / total_sec if total_sec > 0 else 0.0
 
@@ -267,19 +313,34 @@ def main():
             "image": img_name,
             "width": width,
             "height": height,
+            "num_pixels": num_pixels,
+            "megapixels": round(megapixels, 4),
             "lpips_weight": config.lpips_weight,
             "model_load_sec": round(model_load_sec, 3),
             "data_load_sec": round(data_load_sec, 3),
+            "read_decode_preprocess_cpu_sec": round(read_decode_preprocess_cpu_sec, 3),
+            "crop_cpu_sec": round(crop_cpu_sec, 3),
+            "h2d_sec": round(h2d_sec, 3),
             "context_sec": round(context_sec, 3),
+            "context_ms_per_megapixel": round(context_ms_per_megapixel, 2),
+            "data_ms_per_megapixel": round(data_ms_per_megapixel, 2),
             "total_sec": round(total_sec, 3),
             "images_per_hour": round(images_per_hour, 2),
             "peak_gpu_mem_mb": round(peak_mem_mb, 1),
             "bpp": round(bpp_val, 4),
-            "compression_ratio": round(compression_ratio, 2),
+            "estimated_compressed_bits": round(est_compressed_bits, 2),
+            "estimated_compressed_bytes": round(est_compressed_bytes, 2),
+            "raw_rgb_bytes": raw_rgb_bytes,
+            "raw_rgb_to_est_compressed_ratio": round(raw_rgb_to_est_compressed_ratio, 2),
+            "compression_ratio": round(raw_rgb_to_est_compressed_ratio, 2),  # deprecated alias
             "orig_size_bytes": orig_bytes,
+            "orig_file_to_est_compressed_ratio": round(orig_file_to_est_compressed_ratio, 2),
             "context_output_shapes": context_output_shapes,
             "q_latent_shape": q_latent_shape,
             "q_hyper_latent_shape": q_hyper_latent_shape,
+            "q_latent_numel": q_latent_numel,
+            "q_hyper_latent_numel": q_hyper_latent_numel,
+            "context_numel": context_numel,
             "status": "success",
         }
         results.append(row)
@@ -291,7 +352,7 @@ def main():
             f"total {total_sec:6.2f}s | "
             f"mem {peak_mem_mb:7.1f} MB | "
             f"bpp {bpp_val:.4f} | "
-            f"ratio {compression_ratio:.1f}x"
+            f"raw/est ratio {raw_rgb_to_est_compressed_ratio:.1f}x"
         )
 
     successful = [r for r in results if r.get("status") == "success"]
@@ -302,7 +363,7 @@ def main():
     avg_images_per_hour = safe_mean([r["images_per_hour"] for r in successful])
     avg_mem = safe_mean([r["peak_gpu_mem_mb"] for r in successful])
     avg_bpp = safe_mean([r["bpp"] for r in successful])
-    avg_ratio = safe_mean([r["compression_ratio"] for r in successful])
+    avg_ratio = safe_mean([r["raw_rgb_to_est_compressed_ratio"] for r in successful])
 
     report_lines = [
         "=" * 72,
@@ -336,7 +397,7 @@ def main():
         "-" * 72,
         "  COMPRESSION METRICS",
         f"    Average BPP           : {avg_bpp:.4f}",
-        f"    Compression ratio     : {avg_ratio:.2f}x vs uncompressed RGB",
+        f"    Raw RGB / est. CDC    : {avg_ratio:.2f}x",
         f"    Total original size   : {format_size(total_orig_bytes)} ({total_orig_bytes} bytes)",
         "=" * 72,
     ]
