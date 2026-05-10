@@ -1,3 +1,0 @@
-n_denoise_step,precision,batch_size,avg_inference_sec,avg_images_per_hour,avg_peak_gpu_mem_mb,avg_psnr_db,avg_ssim,avg_bpp,n_images
-20,fp32,1,42.546,84.62,52127.4,30.52,0.8942,0.3306,2
-20,fp32,2,53.137,67.75,108564.3,30.51,0.8946,0.3306,2

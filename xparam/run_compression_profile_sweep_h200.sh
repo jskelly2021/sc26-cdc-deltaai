@@ -30,18 +30,37 @@
 #SBATCH --output=/projects/bfod/%u/sc26-cdc-delta/xparam/logs/compression_profile_%j.log
 #SBATCH --error=/projects/bfod/%u/sc26-cdc-delta/xparam/logs/compression_profile_%j.log
 
-set -eo pipefail
+set -euo pipefail
 
-# Environment setup
 module purge
 module load cudatoolkit/25.3_12.8
 module load pytorch-conda/2.8
+module list
 
-# delta's shared conda base does not expose user-site packages by default.
-export PYTHONPATH="$HOME/.local/lib/python3.12/site-packages:${PYTHONPATH:-}"
+source /projects/bfod/jkelly5/envs/cdc-delta/bin/activate
 
-# Install the CDC-specific dependencies into the user site if they are missing.
-python -m pip install --user compressai einops lpips ema-pytorch tqdm matplotlib pandas --quiet
+echo "=== Python environment ==="
+which python
+python --version
+python -m pip --version
+
+python - <<'PY'
+import torch
+import compressai
+import einops
+import lpips
+from ema_pytorch import EMA
+import tqdm
+import matplotlib
+import pandas
+
+print("All imports OK")
+print("torch:", torch.__version__)
+print("torch cuda:", torch.version.cuda)
+print("cuda available:", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("gpu:", torch.cuda.get_device_name(0))
+PY
 
 # Portable delta paths for the cloned SC26 CDC repo.
 # Override IMG_DIR, CKPT_DIR, WEIGHT_DIR, or OUT_ROOT at submit time if your
