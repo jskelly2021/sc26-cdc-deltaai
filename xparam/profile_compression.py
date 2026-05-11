@@ -15,7 +15,7 @@ Usage:
     --ckpt /path/to/checkpoint.pt \
     --checkpoint_label b0.2048 \
     --img_dir imgs \
-    --out_dir /path/to/profile_out \
+    --out_dir outputs/compression_profile/local/b0.2048/repeat_01 \
     --lpips_weight 0.9 \
     --n_images 5 \
     --repeat 1

@@ -8,7 +8,7 @@
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/xparam_b02048_resume_%j.log
+#SBATCH --output=outputs/slurm/xparam_b02048_resume_%j.log
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=yyang48@illinois.edu
 
@@ -18,7 +18,7 @@ BASE=/projects/bfod/yyang48/cdc-deltaai
 IMG_DIR=$BASE/data/imgs
 CODE_DIR=/u/yyang48/code/xparam
 CKPT="$BASE/weights/x_param/image-l2-use_weight5-vimeo-d64-t8193-b0.2048-x-cosine-01-float32-aux0.9lpips_2.pt"
-OUT_DIR="$BASE/output/xparam_eval_2123265_resume/b0.2048"
+OUT_DIR="$BASE/outputs/xparam_eval_2123265_resume/b0.2048"
 
 module purge
 module load default
@@ -28,6 +28,7 @@ conda activate base
 export PYTHONPATH=/u/yyang48/.local/lib/python3.12/site-packages:$PYTHONPATH
 python -m pip install --user ema-pytorch lpips --quiet
 
+mkdir -p outputs/slurm
 mkdir -p "$OUT_DIR"
 mkdir -p "$CODE_DIR/logs"
 

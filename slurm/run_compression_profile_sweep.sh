@@ -8,15 +8,12 @@
 #
 # Submit with:
 #   cd /projects/bfod/$USER/sc26-cdc-deltaai
-#   mkdir -p xparam/logs
-#   sbatch xparam/run_compression_profile_sweep.sh
-#
-# Or, from inside xparam:
-#   sbatch run_compression_profile_sweep.sh
+#   mkdir -p outputs/slurm
+#   sbatch slurm/run_compression_profile_sweep.sh
 #
 # Optional overrides:
-#   N_IMAGES=10 START_INDEX=5 sbatch xparam/run_compression_profile_sweep.sh
-#   N_IMAGES=10 START_INDEX=5 REPEATS=1 sbatch run_compression_profile_sweep.sh
+#   N_IMAGES=10 START_INDEX=5 sbatch slurm/run_compression_profile_sweep.sh
+#   N_IMAGES=10 START_INDEX=5 REPEATS=1 sbatch slurm/run_compression_profile_sweep.sh
 # =============================================================================
 
 #SBATCH --job-name=cdc_compress_profile
@@ -27,8 +24,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
 #SBATCH --time=06:00:00
-#SBATCH --output=/projects/bfod/%u/sc26-cdc-deltaai/xparam/logs/compression_profile_%j.log
-#SBATCH --error=/projects/bfod/%u/sc26-cdc-deltaai/xparam/logs/compression_profile_%j.log
+#SBATCH --output=outputs/slurm/compression_profile_%j.log
+#SBATCH --error=outputs/slurm/compression_profile_%j.log
 
 set -euo pipefail
 
@@ -70,13 +67,13 @@ if [[ ! -d "${CKPT_DIR}" ]]; then
 fi
 
 JOB_ID="${SLURM_JOB_ID:-local}"
-OUT_ROOT="${OUT_ROOT:-${REPO_DIR}/output/compression_profile/${JOB_ID}}"
+OUT_ROOT="${OUT_ROOT:-${REPO_DIR}/outputs/compression_profile/${JOB_ID}}"
 
 N_IMAGES="${N_IMAGES:-5}"
 START_INDEX="${START_INDEX:-0}"
 REPEATS="${REPEATS:-3}"
 
-mkdir -p "${REPO_DIR}/xparam/logs" "${OUT_ROOT}"
+mkdir -p "${REPO_DIR}/outputs/slurm" "${OUT_ROOT}"
 
 if [[ ! -d "${REPO_DIR}/xparam" ]]; then
     echo "ERROR: xparam directory not found under REPO_DIR=${REPO_DIR}" >&2

@@ -8,7 +8,7 @@
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 #SBATCH --time=04:00:00
-#SBATCH --output=logs/xparam_eval_%j.log
+#SBATCH --output=outputs/slurm/xparam_eval_%j.log
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=jskelly@tamu.edu
 
@@ -18,7 +18,7 @@ set -e
 BASE=/projects/bfod/jskelly5/cdc-deltaai
 CKPT_DIR=$BASE/weights/x_param
 IMG_DIR=$BASE/data/imgs
-OUT_BASE=$BASE/output/xparam_eval_${SLURM_JOB_ID}
+OUT_BASE=$BASE/outputs/xparam_eval_${SLURM_JOB_ID}
 CODE_DIR=/u/jskelly5/code/xparam
 
 # ── Environment ───────────────────────────────────────────────────────────────
@@ -30,6 +30,7 @@ conda activate base
 export PYTHONPATH=/u/jskelly5/.local/lib/python3.12/site-packages:$PYTHONPATH
 python -m pip install --user ema-pytorch lpips --quiet
 
+mkdir -p outputs/slurm
 mkdir -p $OUT_BASE
 mkdir -p $CODE_DIR/logs
 

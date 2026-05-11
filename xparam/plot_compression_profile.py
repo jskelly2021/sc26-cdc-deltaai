@@ -12,8 +12,8 @@ do not describe diffusion reconstruction timing.
 Usage:
   cd /projects/bfod/$USER/sc26-cdc-deltaai
   python xparam/plot_compression_profile.py \
-    --profile_dir output/compression_profile/<job_id> \
-    --out_dir output/compression_profile/<job_id>
+    --profile_dir outputs/compression_profile/<job_id> \
+    --out_dir outputs/compression_profile/<job_id>
 
 Outputs:
   compression_profile_summary.csv

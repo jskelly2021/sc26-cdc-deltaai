@@ -11,7 +11,7 @@
 #SBATCH --time=7-00:00:00              # Time limit hrs:min:sec
 #SBATCH --partition=ava_m.p          # partition name
 #SBATCH --exclude=ava-m4          # select your node (or not)
-#SBATCH --output=logs/job_%j.log   # output log
+#SBATCH --output=outputs/slurm/job_%j.log   # output log
 #SBATCH -a 0
 
 

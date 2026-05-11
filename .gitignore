@@ -1,21 +1,49 @@
+# Local submit/test helpers
 submit.sh
 test_slurm.sh
+
+# Python build/cache
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
 .Python
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+
+# Local environments and OS files
 .env
+.venv/
+env/
+venv/
 .DS_Store
+
+# Generated experiment outputs and logs
 outputs/
 output/
 logs/
+slurm-*.out
+*.log
+
+# Model artifacts and checkpoints
 weights/
 *.pt
 *.pth
 *.ckpt
+
+# Local datasets and copied image folders
+data/*
+!data/README.md
+imgs/
 100_0005/
-data/100_0005/
+
+# Generated result artifacts outside outputs/
+results/**/*.csv
+results/**/*.txt
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.pdf
+!results/README.md

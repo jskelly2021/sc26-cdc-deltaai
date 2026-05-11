@@ -13,11 +13,12 @@
 #   4. Runs plot_results.py to generate all five plots from the sweep CSV.
 #
 # Submit with:
-#   sbatch xparam/run_profiling_sweep.sh
+#   mkdir -p outputs/slurm
+#   sbatch slurm/legacy/run_profiling_sweep.sh
 #
 # Monitor with:
 #   squeue -u $USER
-#   tail -f xparam/logs/profiling_<jobid>.log
+#   tail -f outputs/slurm/profiling_<jobid>.log
 # =============================================================================
 
 #SBATCH --job-name=cdc_profile_sweep
@@ -28,8 +29,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00
-#SBATCH --output=xparam/logs/profiling_%j.log
-#SBATCH --error=xparam/logs/profiling_%j.log
+#SBATCH --output=outputs/slurm/profiling_%j.log
+#SBATCH --error=outputs/slurm/profiling_%j.log
 
 # ── Environment setup ─────────────────────────────────────────────────────────
 module load python/miniforge3_pytorch/2.10.0
@@ -58,12 +59,12 @@ FINAL_BATCH_SIZE=1
 REPEATS=3
 
 # Output directories
-PROFILE_OUT="/projects/bfod/$USER/cdc-deltaai/output/profiling"
-BATCH_PILOT_OUT="/projects/bfod/$USER/cdc-deltaai/output/sweep/batch_pilot"
-SWEEP_OUT="/projects/bfod/$USER/cdc-deltaai/output/sweep/step_sweep"
-PLOT_OUT="/projects/bfod/$USER/cdc-deltaai/output/plots"
+PROFILE_OUT="/projects/bfod/$USER/cdc-deltaai/outputs/profiling"
+BATCH_PILOT_OUT="/projects/bfod/$USER/cdc-deltaai/outputs/sweep/batch_pilot"
+SWEEP_OUT="/projects/bfod/$USER/cdc-deltaai/outputs/sweep/step_sweep"
+PLOT_OUT="/projects/bfod/$USER/cdc-deltaai/outputs/plots"
 
-mkdir -p xparam/logs "${PROFILE_OUT}" "${BATCH_PILOT_OUT}" "${SWEEP_OUT}" "${PLOT_OUT}"
+mkdir -p outputs/slurm "${PROFILE_OUT}" "${BATCH_PILOT_OUT}" "${SWEEP_OUT}" "${PLOT_OUT}"
 
 cd "${REPO_DIR}/xparam"
 
